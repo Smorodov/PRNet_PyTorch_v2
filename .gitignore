@@ -1,0 +1,4 @@
+*.mat
+*.ckpt
+lightning_logs/*
+checkpoints/*
