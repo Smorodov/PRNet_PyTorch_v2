@@ -10,9 +10,8 @@
 Before we start generat uv position map and train it. The first step is generate BFM.mat according to [Basel Face Model](https://faces.dmi.unibas.ch/bfm/).
 For simplicity, The corresponding `BFM.mat` has been provided [here](https://drive.google.com/open?id=1Bl21HtvjHNFguEy_i1W5g0QOL8ybPzxw).
 
-After download it successfully, you need to move `BFM.mat` to `utils/`.
+After download it successfully, you need to move `BFM.mat` to `DS_generator/BFM`.
 
-Besides, the essential python packages were listed in `requirements.txt`.
 
 ## ② Generate uv_pos_map
 
