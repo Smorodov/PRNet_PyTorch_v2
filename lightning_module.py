@@ -313,7 +313,7 @@ class LightningTemplateModel(LightningModule):
         """
         optimizer = optim.Adam(self.parameters(), lr=self.hparams.learning_rate,betas=(0.5, 0.999))       
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-        #scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+        
         return [optimizer], [scheduler]
 
     def __dataloader(self, train):

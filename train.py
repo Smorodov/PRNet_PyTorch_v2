@@ -24,7 +24,7 @@ def getLastCP():
     py = pathlib.Path().glob("checkpoints/*.ckpt")
     cpts={}
     for file in py:
-        ind=re.match('.*?([0-9]+).*$', str(file) ).group(1)
+        ind=re.match('.*?_([0-9]+).*$', str(file) ).group(1)
         cpts[int(ind)]= str(file)
         print(file)
         print(ind)
@@ -42,8 +42,8 @@ checkpoint_callback = ModelCheckpoint(
     save_top_k=-1,
     period=1,
     filepath='./checkpoints/',    
-    verbose=True,
-    prefix=''
+    prefix='',
+    verbose=True
 )
 
 earlystopp_callback=EarlyStopping(
@@ -68,8 +68,9 @@ def main(hparams):
     # ------------------------
     model = LightningTemplateModel(hparams)
     
-    last_cp= getLastCP()    
-    model.load_from_checkpoint(last_cp)
+    last_cp= getLastCP()
+    #if (last_cp!=None):        
+    #    model.load_from_checkpoint(checkpoint_path=last_cp)
     
     # ------------------------
     # 2 INIT TRAINER
@@ -80,6 +81,7 @@ def main(hparams):
         default_save_path='./checkpoints/',
         logger=logger,
         amp_level='O2',
+        resume_from_checkpoint=last_cp,
         use_amp=False,
         gradient_clip_val=1,
         gpus=hparams.gpus,
