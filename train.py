@@ -23,23 +23,25 @@ import collections
 def getLastCP():    
     py = pathlib.Path().glob("checkpoints/*.ckpt")
     cpts={}
-    for file in py:
-        ind=re.match('.*?_([0-9]+).*$', str(file) ).group(1)
-        cpts[int(ind)]= str(file)
-        print(file)
-        print(ind)
-    cpts = collections.OrderedDict(sorted(cpts.items()))
-    k=list(cpts.keys() )
-    klast=k[len(k)-1]
-    print(cpts[klast])
-    return cpts[klast]
-
+    try:       
+        for file in py:
+            ind=re.match('.*?_([0-9]+).*$', str(file) ).group(1)
+            cpts[int(ind)]= str(file)
+            print(file)
+            print(ind)
+        cpts = collections.OrderedDict(sorted(cpts.items()))
+        k=list(cpts.keys() )
+        klast=k[len(k)-1]
+        print(cpts[klast])
+        return cpts[klast]
+    except:
+        return None
 
 #SEED = 2334
 #torch.manual_seed(SEED)
 #np.random.seed(SEED)
 checkpoint_callback = ModelCheckpoint(
-    save_top_k=-1,
+    save_top_k=5,
     period=1,
     filepath='./checkpoints/',    
     prefix='',
@@ -124,6 +126,32 @@ if __name__ == '__main__':
         action='store_true',
         help='if true uses 16 bit precision'
     )
+
+    # input image size
+    parent_parser.add_argument(
+        '--input_size',
+        type=int,
+        default=256,
+        help='input image size'
+    )
+
+    # is input image color ?'
+    parent_parser.add_argument(
+        '--is_color',
+        type=bool,
+        default=True,
+        help='is input image color ?'
+    )
+
+    # dataset path
+    parent_parser.add_argument(
+        '--data_dir',
+        type=str,
+        default='Y:/PRNet_PyTorch/utils/300WLP_IBUG',
+        help='dataset path'
+    )
+
+
 
     # each LightningModule defines arguments relevant to it
     parser = LightningTemplateModel.add_model_specific_args(parent_parser, root_dir)

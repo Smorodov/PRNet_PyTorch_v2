@@ -133,7 +133,7 @@ class ResFCN256(nn.Module):
                                              padding=1)  # keep shape invariant.
 
         # ACT
-        self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         se = self.block0(x)  # 256 x 256 x 16
@@ -167,5 +167,5 @@ class ResFCN256(nn.Module):
         pd = self.upsample15(pd)  # 256 x 256 x 3
         pos = self.upsample16(pd)  # 256 x 256 x 3
 
-        pos = self.sigmoid(pos)
+        #pos = self.sigmoid(pos)
         return pos

@@ -1,5 +1,5 @@
 7767517
-90 100
+89 99
 Input            input_img                0 1 input_img
 Convolution      116                      1 1 input_img 116 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 5=0 6=432
 Split            splitncnn_0              1 2 116 116_splitncnn_0 116_splitncnn_1
@@ -88,5 +88,4 @@ Deconvolution    189                      1 1 188 189 0=16 1=4 11=4 2=1 12=1 3=2
 Deconvolution    190                      1 1 189 190 0=16 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 5=1 6=2304
 Deconvolution    191                      1 1 190 191 0=3 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 5=1 6=432
 Deconvolution    192                      1 1 191 192 0=3 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 5=1 6=81
-Deconvolution    193                      1 1 192 193 0=3 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 5=1 6=81
-Sigmoid          pos_img                  1 1 193 pos_img
+Deconvolution    pos_img                  1 1 192 pos_img 0=3 1=3 11=3 2=1 12=1 3=1 13=1 4=1 14=1 5=1 6=81

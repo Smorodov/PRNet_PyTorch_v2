@@ -19,7 +19,7 @@ from torchvision.utils import make_grid
 
 from resfcn256 import ResFCN256
 from WLP300dataset import PRNetDataset, ToTensor, ToNormalize, RescaleAndCrop, FlipH
-
+from prnet_loss import WeightMaskLoss
 #import pytorch_msssim
 from losses import SSIM
 
@@ -30,99 +30,9 @@ from cv_plot import plot_kpt
 import cv2
 import numpy as np
 
-uv_kpt_ind_path = "uv_data/uv_kpt_ind.txt"
-face_ind_path =  "uv_data/face_ind.txt"
-triangles_path = "uv_data/triangles.txt"
-
-uv_kpt_ind = np.loadtxt(uv_kpt_ind_path).astype(np.int32)  # 2 x 68 get kpt
-face_ind = np.loadtxt(face_ind_path).astype(np.int32)  # get valid vertices in the pos map
-triangles = np.loadtxt(triangles_path).astype(np.int32)  # ntri x 3
-
-weights_img=cv2.imread('uv_data/uv_weight_mask_gdh.png')
-mask_image = np.zeros(shape=[256, 256, 3], dtype=np.float32)
-
-for i in range(256*256):
-    x=i//256
-    y=i%256
-    if weights_img[y,x,:].any()>0:        
-        mask_image[y,x,:]=1.0
-
 #cv2.imshow("mask",mask_image)
 #cv2.waitKey()
 
-def generate_uv_coords():
-    resolution = 256
-    uv_coords = np.meshgrid(range(resolution), range(resolution))
-    # uv_coords = np.transpose(np.array(uv_coords), [1, 2, 0])
-    uv_coords = np.reshape(uv_coords, [resolution ** 2, -1])
-    uv_coords = uv_coords[face_ind, :]
-    uv_coords = np.hstack((uv_coords[:, :2], np.zeros([uv_coords.shape[0], 1])))
-    return uv_coords
-
-def get_landmarks(pos):
-    '''
-    Notice: original tensorflow version shape is [256, 256, 3] (H, W, C)
-            where our pytorch shape is [3, 256, 256] (C, H, W).
-
-    Args:
-        pos: the 3D position map. shape = (256, 256, 3).
-    Returns:
-        kpt: 68 3D landmarks. shape = (68, 3).
-    '''
-    
-    kpt = pos[uv_kpt_ind[1, :], uv_kpt_ind[0, :], :]
-    return kpt
-
-def get_vertices(pos):
-    '''
-    Args:
-        pos: the 3D position map. shape = (3, 256, 256).
-    Returns:
-        vertices: the vertices(point cloud). shape = (num of points, 3). n is about 40K here.
-    '''
-    all_vertices = np.reshape(pos, [256 ** 2, -1])
-    vertices = all_vertices[face_ind, :]
-    return vertices
-
-uv_coords = generate_uv_coords()
-# -------------------------
-# 
-# -------------------------  
-def show_batch(img, pos):    
-    h,w = img.shape[2],img.shape[3]
-    batch_size=img.shape[0]
-    result=torch.Tensor(batch_size,3,h,w)    
-    img_cpu = img.to("cpu").detach().numpy()*255
-    pos_cpu = pos.to("cpu").detach().numpy()*255    
-
-    for i in range(min(img_cpu.shape[0],pos_cpu.shape[0])):
-        im = img_cpu[i,:,:,:]
-        im = im.squeeze()
-        im = im.transpose((1,2,0))         
-        
-        pos = pos_cpu[i,:,:,:]
-        pos = pos.squeeze()        
-        
-        pos = pos.transpose(1, 2, 0)        
-        kpt = get_landmarks(pos)
-        im = plot_kpt(im, kpt)
-        #im=plot_landmarks(im, (annotation_cpu[i])*224)              
-
-        im = cv2.cvtColor(im,cv2.COLOR_RGB2BGR)
-        im = torch.from_numpy(im).float()
-        
-        im = im[np.newaxis, :]     
-        im = im.permute(0, 3, 1, 2)        
-        result[i,:,:,:]=im       
-    return result
-
-# -------------------------
-# 
-# -------------------------  
-def show_res(im, pos):                     
-    kpt = get_landmarks(pos)
-    im = plot_kpt(im, kpt)        
-    return im
 
 
 class LightningTemplateModel(LightningModule):
@@ -139,8 +49,31 @@ class LightningTemplateModel(LightningModule):
         # init superclass
         super(LightningTemplateModel, self).__init__()
         self.hparams = hparams
-                
+
+        self.uv_kpt_ind_path = "uv_data/uv_kpt_ind.txt"
+        self.face_ind_path =  "uv_data/face_ind.txt"
+        self.triangles_path = "uv_data/triangles.txt"
         
+        self.uv_kpt_ind = np.loadtxt(self.uv_kpt_ind_path).astype(np.int32)  # 2 x 68 get kpt
+        self.face_ind = np.loadtxt(self.face_ind_path).astype(np.int32)  # get valid vertices in the pos map
+        self.triangles = np.loadtxt(self.triangles_path).astype(np.int32)  # ntri x 3
+        
+        self.input_size=hparams.input_size
+        
+        self.input_channels=1
+        if hparams.is_color:            
+            self.input_channels=3
+        
+        self.weights_img=cv2.imread('uv_data/uv_weight_mask_gdh.png')
+        self.weights_img=cv2.resize(self.weights_img,(self.input_size,self.input_size))
+        self.mask_image = np.zeros(shape=[self.input_size, self.input_size, self.input_channels], dtype=np.float32)
+                
+        for i in range(self.input_size*self.input_size):
+            x=i//self.input_size
+            y=i%self.input_size
+            if self.weights_img[y,x,:].any()>0:        
+                self.mask_image[y,x,:]=1.0
+                
         #self.trainer = pl.Trainer(logger=self.logger, accumulate_grad_batches=2,amp_level='O2', use_amp=False)
         #self.trainer = pl.Trainer(default_save_path='./checkpoints/', logger=self.logger, amp_level='O2', use_amp=False, checkpoint_callback=checkpoint_callback)
         self.batch_size = hparams.batch_size
@@ -151,8 +84,8 @@ class LightningTemplateModel(LightningModule):
         # build model
         self.__build_model()
         
-        self.ssim_loss = SSIM(mask_path="uv_data/uv_weight_mask_gdh.png", gauss="original")
-        
+        #self.ssim_loss = SSIM(mask_path="uv_data/uv_weight_mask_gdh.png", gauss="original")
+        self.ssim_loss = WeightMaskLoss(mask_path="uv_data/uv_weight_mask_gdh.png")
         #self.ssim_loss = pytorch_msssim.SSIM(size_average=False)
 
     # ---------------------
@@ -163,7 +96,7 @@ class LightningTemplateModel(LightningModule):
         Layout model
         :return:
         """        
-        self.model = ResFCN256()
+        self.model = ResFCN256(resolution_input=self.input_size)
           
     # ---------------------
     # TRAINING
@@ -208,8 +141,8 @@ class LightningTemplateModel(LightningModule):
         if (self.global_step % 500) == 0:                        
             # self.logger.experiment.add_image('train_results',make_grid(y_hat), batch_idx)    
             map_gt, map_pred = make_grid(y), make_grid(y_hat)            
-            gr=make_grid(show_batch(x, y_hat),normalize=True)
-            gr_gt=make_grid(show_batch(x, y),normalize=True)
+            gr=make_grid(self.show_batch(x, y_hat),normalize=True)
+            gr_gt=make_grid(self.show_batch(x, y),normalize=True)
             
             self.logger.experiment.add_image('map_gt', map_gt, batch_idx)
             self.logger.experiment.add_image('map_pred', map_pred, batch_idx)
@@ -252,8 +185,8 @@ class LightningTemplateModel(LightningModule):
         if (batch_idx  == 0):                        
             #self.logger.experiment.add_image('val_results',make_grid(y_hat), batch_idx)    
             map_gt, map_pred = make_grid(y), make_grid(y_hat)            
-            gr=make_grid(show_batch(x, y_hat),normalize=True)
-            gr_gt=make_grid(show_batch(x, y),normalize=True)
+            gr=make_grid(self.show_batch(x, y_hat),normalize=True)
+            gr_gt=make_grid(self.show_batch(x, y),normalize=True)
             
             self.logger.experiment.add_image('val_map_gt', map_gt, batch_idx)
             self.logger.experiment.add_image('val_map_pred', map_pred, batch_idx)
@@ -318,7 +251,7 @@ class LightningTemplateModel(LightningModule):
 
     def __dataloader(self, train):
 
-        data_dir ='Y:/PRNet_PyTorch/utils/300WLP_IBUG'        
+        data_dir = self.hparams.data_dir   
         dataset=PRNetDataset(root_dir=data_dir,
                              train=train,
                              transform=transforms.Compose([ FlipH(),RescaleAndCrop(),                                                         
@@ -379,3 +312,77 @@ class LightningTemplateModel(LightningModule):
         parser.add_argument('--optimizer_name', default='adam', type=str)
         parser.add_argument('--batch_size', default=48, type=int)
         return parser
+
+    def generate_uv_coords(self):
+        resolution = 256
+        uv_coords = np.meshgrid(range(resolution), range(resolution))
+        # uv_coords = np.transpose(np.array(uv_coords), [1, 2, 0])
+        uv_coords = np.reshape(uv_coords, [resolution ** 2, -1])
+        uv_coords = uv_coords[face_ind, :]
+        uv_coords = np.hstack((uv_coords[:, :2], np.zeros([uv_coords.shape[0], 1])))
+        return uv_coords
+    
+    def get_landmarks(self,pos):
+        '''
+        Notice: original tensorflow version shape is [256, 256, 3] (H, W, C)
+                where our pytorch shape is [3, 256, 256] (C, H, W).
+    
+        Args:
+            pos: the 3D position map. shape = (256, 256, 3).
+        Returns:
+            kpt: 68 3D landmarks. shape = (68, 3).
+        '''
+        
+        kpt = pos[self.uv_kpt_ind[1, :], self.uv_kpt_ind[0, :], :]
+        return kpt
+    
+    def get_vertices(self,pos):
+        '''
+        Args:
+            pos: the 3D position map. shape = (3, 256, 256).
+        Returns:
+            vertices: the vertices(point cloud). shape = (num of points, 3). n is about 40K here.
+        '''
+        all_vertices = np.reshape(pos, [256 ** 2, -1])
+        vertices = all_vertices[self.face_ind, :]
+        return vertices
+    
+    # uv_coords = generate_uv_coords()
+    # -------------------------
+    # 
+    # -------------------------  
+    def show_batch(self,img, pos):    
+        h,w = img.shape[2],img.shape[3]
+        batch_size=img.shape[0]
+        result=torch.Tensor(batch_size,3,h,w)    
+        img_cpu = img.to("cpu").detach().numpy()*255
+        pos_cpu = pos.to("cpu").detach().numpy()*255    
+    
+        for i in range(min(img_cpu.shape[0],pos_cpu.shape[0])):
+            im = img_cpu[i,:,:,:]
+            im = im.squeeze()
+            im = im.transpose((1,2,0))         
+            
+            pos = pos_cpu[i,:,:,:]
+            pos = pos.squeeze()        
+            
+            pos = pos.transpose(1, 2, 0)        
+            kpt = self.get_landmarks(pos)
+            im = plot_kpt(im, kpt)
+            #im=plot_landmarks(im, (annotation_cpu[i])*224)              
+    
+            im = cv2.cvtColor(im,cv2.COLOR_RGB2BGR)
+            im = torch.from_numpy(im).float()
+            
+            im = im[np.newaxis, :]     
+            im = im.permute(0, 3, 1, 2)        
+            result[i,:,:,:]=im       
+        return result
+    
+    # -------------------------
+    # 
+    # -------------------------  
+    def show_res(self,im, pos):                     
+        kpt = self.get_landmarks(pos)
+        im = plot_kpt(im, kpt)        
+        return im
